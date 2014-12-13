@@ -1,4 +1,22 @@
-pub fn parse() -> int {
+pub fn execute_io() {
+
+  // parse this giant buffer
+  parse();
+
+  // Pull out packets
+
+  // Execute packets in thread
+
+  // conglomerate results into a single buffer
+
+  // send buffer back
+
+
+
+}
+
+fn parse() -> int {
+
     println!("parsed");
     5i
 }

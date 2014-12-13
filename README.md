@@ -31,3 +31,27 @@ A packet parsing library for inter-microcontroller communications. This library 
 
 The library will also send a response for each type of packet. All "write" commands will send back an acknowledgement or an error code depending on the result of executing the function. All "read" commands will return the value that was read or an error code. GPIO Interrupts and UART read events can happen at any time. 
 
+setGPIOPull(function *pull_gpio);
+
+setSPITransfer(configure_spi_slave);
+
+PARSING
+transfer_spi <data>, i2c_transfer <data>, gpio_pull <dir>
+configure_spi_slave(data);
+
+enum {
+  GPIO_PULL
+  SPI_SEND
+}
+
+function arr[] = [<>, <>, ]
+
+setCommandHandler(GPIO_PULL, reach_gpio_pull_func);
+
+set_gpio_pull_func();
+set_i2c_transfer_func()l;
+set_spi_transfer_fiunc();
+
+1. Parsing the binary packet
+2. Set the appropriate command handler
+3. Calling the command (threads?)

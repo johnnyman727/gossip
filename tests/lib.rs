@@ -1,5 +1,5 @@
 extern crate gossip;
-use gossip::parse;
+use gossip::execute_io;
 
 #[test]
 fn foo() {
