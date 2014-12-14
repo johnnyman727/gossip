@@ -17,19 +17,50 @@ enum State {
 }
 
 mod commands {
-    pub const CMD_NOP: u8 =             0x00;
-    pub const CMD_SLEEP: u8 =           0x80;
-    pub const CMD_SPIENABLE: u8 =       0x90;
-    pub const CMD_SPITRANSFER: u8 =     0x91;
-    pub const CMD_SPIDISABLE: u8 =      0x92;
-    pub const CMD_I2CENABLE: u8 =       0xa0;
-    pub const CMD_I2CWRITE: u8 =        0xa1;
-    pub const CMD_I2CREAD: u8 =         0xa2;
-    pub const CMD_I2CDISABLE: u8 =      0xa3;
-    pub const CMD_UARTENABLE: u8 =      0xb0;
-    pub const CMD_UARTTRANSFER: u8 =    0xb1;
-    pub const CMD_UARTRECEIVE: u8 =     0xb2;
-    pub const CMD_UARTDISABLE: u8 =     0xb3;
+    // Base Addr
+    pub const CMD_BASE: u8 =                0x80;
+
+    // General Ops
+    pub const CMD_NOP: u8 =                 0x00;
+    pub const CMD_SLEEP: u8 =               0x10 | CMD_BASE;
+
+    // SPI
+    pub const CMD_SPIENABLE: u8 =           0x20 | CMD_BASE;
+    pub const CMD_SPITRANSFER: u8 =         0x21 | CMD_BASE;
+    pub const CMD_SPIDISABLE: u8 =          0x22 | CMD_BASE;
+    pub const CMD_SPISETCLOCKDIVISER: u8 =  0x23 | CMD_BASE;
+    pub const CMD_SPISETSPIMODE: u8 =       0x24 | CMD_BASE;
+    pub const CMD_SPISETROLE: u8 =          0x25 | CMD_BASE;
+    pub const CMD_SPISETFRAME: u8 =         0x26 | CMD_BASE;
+
+    // I2C
+    pub const CMD_I2CENABLE: u8 =           0x30 | CMD_BASE;
+    pub const CMD_I2CWRITE: u8 =            0x31 | CMD_BASE;
+    pub const CMD_I2CREAD: u8 =             0x32 | CMD_BASE;
+    pub const CMD_I2CDISABLE: u8 =          0x33 | CMD_BASE;
+    pub const CMD_SPISETMODE: u8 =          0x34 | CMD_BASE;
+    pub const CMD_SPISETSLAVEADDRESS: u8 =  0x35 | CMD_BASE;
+
+    // UART
+    pub const CMD_UARTENABLE: u8 =          0x40 | CMD_BASE;
+    pub const CMD_UARTTRANSFER: u8 =        0x41 | CMD_BASE;
+    pub const CMD_UARTRECEIVE: u8 =         0x42 | CMD_BASE;
+    pub const CMD_UARTDISABLE: u8 =         0x43 | CMD_BASE;
+    pub const CMD_UARTSETBAUDRATE: u8 =     0x44 | CMD_BASE;
+    pub const CMD_UARTSETDATABITS: u8 =     0x45 | CMD_BASE;
+    pub const CMD_UARTSETPARITY: u8 =       0x46 | CMD_BASE;
+    pub const CMD_UARTSETSTOPBITS: u8 =     0x47 | CMD_BASE;
+
+}
+
+trait SPI {
+  fn enable();
+  fn transfer(byte: u8) -> u8;
+  fn disable();
+  fn setClockSpeedDivisor(divisor: u8);
+  fn setMode(mode: u8);
+  fn setRole(role: u8);
+  fn setFrame(frame: u8);
 }
 
 
@@ -41,7 +72,7 @@ struct IOStateMachine {
 impl IOStateMachine {
 
     fn is_repeat_token(&mut self, byte: u8) -> bool {
-        byte < 0b10000000
+        byte < commands::CMD_BASE
     }
 
     fn is_valid_repeat_state(&mut self) -> bool {
@@ -61,7 +92,7 @@ impl IOStateMachine {
             self.state = State::ExpectRepeatCommand;
             return
         }
-        // If we are awaiting the command to repeat
+        // Repeat number has been set and we need to set the command that we will be repeating
         else if self.repeat_remaining != 0 && self.state == State::ExpectRepeatCommand {
             match byte {
                 // If it's a nop, do it now...
@@ -190,6 +221,42 @@ fn nop() {
 fn sleep() {
     nop();
 }
+
+struct Mock_SPI {
+    enable: bool;
+    clock_speed_divisor: u8;
+    out_reg: u8;
+    mode: u8;
+    frame: u8;
+    role: u8;
+}
+
+impl SPI for Mock_SPI {
+  fn transfer(&mut self, byte: u8) -> u8 {
+    if self.enable {
+        self.out_reg = byte;
+    }
+  }
+  fn enable() {
+    self.enable = true;
+  }
+  fn disable() {
+    self.enable = false;
+  }
+  fn setClockSpeedDivisor(divisor: u8) {
+    self.clock_speed_divisor = divisor;
+  }
+  fn setMode(mode: u8) {
+    self.mode = mode;
+  }
+  fn setRole(role: u8) {
+    self.role = role;
+  }
+  fn setFrame(frame: u8) {
+    self.frame = frame;
+  }
+}
+
 
 //#[cfg(test)]
 mod test {
@@ -482,6 +549,18 @@ mod test {
     #[test]
     fn test_valid_state() {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0};
+        assert_eq!(s.is_valid_repeat_state(), false);
+        s.handle_byte(commands::CMD_SPIENABLE);
+        assert_eq!(s.is_valid_repeat_state(), true);
+        s.handle_byte(commands::CMD_SPITRANSFER);
+        assert_eq!(s.is_valid_repeat_state(), false);
+
+    }
+
+    #[test]
+    fn test_spi_set_clock_divisor() {
+        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0};
+        s.handle_byte(commands::CMD_SPI);
         assert_eq!(s.is_valid_repeat_state(), false);
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.is_valid_repeat_state(), true);
