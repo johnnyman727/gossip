@@ -19,6 +19,10 @@ enum State {
     UARTEnable,
     UARTTransfer,
     UARTReceive,
+    UARTSetBaudrate,
+    UARTSetDataBits,
+    UARTSetParity,
+    UARTSetStopBits,
     ExpectRepeatCommand,
 }
 
@@ -258,20 +262,48 @@ impl<'a, SPIT, I2CT, UARTT> IOStateMachine<'a, SPIT, I2CT, UARTT> where SPIT: SP
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_UARTENABLE) => {
-                // uart.enable();
+                self.uart.enable();
                 self.state = State::UARTEnable;
             },
             (State::UARTEnable, commands::CMD_UARTTRANSFER) => {
                 self.state = State::UARTTransfer;
             },
             (State::UARTTransfer, _) => {
-                // uart.transfer(byte);
+                self.uart.transfer(byte);
                 if self.repeat_remaining == 0 {
                     self.state = State::UARTEnable;
                 }
             },
             (State::UARTEnable, commands::CMD_UARTDISABLE) => {
-                // uart.disable();
+                self.uart.disable();
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_UARTSETBAUDRATE) => {
+                self.state = State::UARTSetBaudrate;
+            },
+            (State::UARTSetBaudrate, _) => {
+                self.uart.setBaudrate(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_UARTSETSTOPBITS) => {
+                self.state = State::UARTSetStopBits;
+            },
+            (State::UARTSetStopBits, _) => {
+                self.uart.setStopBits(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_UARTSETPARITY) => {
+                self.state = State::UARTSetParity;
+            },
+            (State::UARTSetParity, _) => {
+                self.uart.setParity(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_UARTSETDATABITS) => {
+                self.state = State::UARTSetDataBits;
+            },
+            (State::UARTSetDataBits, _) => {
+                self.uart.setDataBits(byte);
                 self.state = State::Idle;
             },
             _ => nop(),
@@ -718,6 +750,7 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
     }
 
     #[test]
@@ -815,6 +848,5 @@ mod test {
         assert_eq!(s.is_valid_repeat_state(), true);
         s.handle_byte(commands::CMD_SPITRANSFER);
         assert_eq!(s.is_valid_repeat_state(), false);
-
     }
 }
