@@ -54,4 +54,7 @@ set_spi_transfer_fiunc();
 
 1. Parsing the binary packet
 2. Set the appropriate command handler
-3. Calling the command (threads?)
+3. Calling the command
+
+Generics for command functions
+for all T where T implements SPI
