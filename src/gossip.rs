@@ -757,12 +757,16 @@ mod test {
     fn test_handle_uart_transfer() {
         let mut m = MockMCU::new();
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let out: u8 = 200;
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
         s.handle_byte(commands::CMD_UARTTRANSFER);
         assert_eq!(s.state, State::UARTTransfer);
-        s.handle_byte(200);
+        s.handle_byte(out);
+        assert_eq!(s.uart.out_reg, out);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
     }
 
     #[test]
@@ -771,8 +775,10 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
         s.handle_byte(commands::CMD_UARTDISABLE);
         assert_eq!(s.state, State::Idle);
+        assert_eq!(s.uart.enable, false);
     }
 
      #[test]
@@ -781,24 +787,54 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
         s.handle_byte(commands::CMD_UARTTRANSFER);
         assert_eq!(s.state, State::UARTTransfer);
         s.handle_byte(commands::CMD_UARTDISABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
     }
 
     #[test]
     fn test_handle_uart_write_repeat_disable() {
         let mut m = MockMCU::new();
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let repeat: u8 = 2;
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
-        s.handle_byte(2);
+        assert_eq!(s.uart.enable, true);
+        s.handle_byte(repeat);
         assert_eq!(s.state, State::ExpectRepeatCommand);
         s.handle_byte(commands::CMD_UARTTRANSFER);
         assert_eq!(s.state, State::UARTTransfer);
         s.handle_byte(commands::CMD_UARTDISABLE);
         assert_eq!(s.state, State::UARTTransfer);
+    }
+
+      #[test]
+    fn test_uart_config() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let baudrate: u8 = 7;
+        let stop_bits: u8 = 6;
+        let parity: u8 = 5;
+        let data_bits: u8 = 4;
+        s.handle_byte(commands::CMD_UARTSETBAUDRATE);
+        s.handle_byte(baudrate);
+        assert_eq!(s.uart.baudrate, baudrate);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_UARTSETSTOPBITS);
+        s.handle_byte(stop_bits);
+        assert_eq!(s.uart.stop_bits, stop_bits);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_UARTSETPARITY);
+        s.handle_byte(parity);
+        assert_eq!(s.uart.parity, parity);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_UARTSETDATABITS);
+        s.handle_byte(data_bits);
+        assert_eq!(s.uart.data_bits, data_bits);
+        assert_eq!(s.state, State::Idle);
     }
 
     #[test]
@@ -807,8 +843,10 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
         s.handle_byte(commands::CMD_SPITRANSFER);
         assert_eq!(s.state, State::UARTEnable);
+        assert_eq!(s.uart.enable, true);
     }
 
     #[test]
@@ -817,6 +855,7 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_SPITRANSFER);
         assert_eq!(s.state, State::Idle);
+        assert_eq!(s.spi.enable, false);
     }
 
     #[test]
@@ -825,8 +864,10 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
+        assert_eq!(s.i2c.enable, true);
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::I2CEnable);
+        assert_eq!(s.i2c.enable, true);
     }
 
     #[test]
@@ -835,8 +876,10 @@ mod test {
         let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
+        assert_eq!(s.spi.enable, true);
         s.handle_byte(0);
         assert_eq!(s.state, State::SPIEnable);
+        assert_eq!(s.spi.enable, true);
     }
 
     #[test]
@@ -846,6 +889,7 @@ mod test {
         assert_eq!(s.is_valid_repeat_state(), false);
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.is_valid_repeat_state(), true);
+        assert_eq!(s.spi.enable, true);
         s.handle_byte(commands::CMD_SPITRANSFER);
         assert_eq!(s.is_valid_repeat_state(), false);
     }
