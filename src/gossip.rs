@@ -33,7 +33,7 @@ mod commands {
     pub const CMD_SPITRANSFER: u8 =         0x21 | CMD_BASE;
     pub const CMD_SPIDISABLE: u8 =          0x22 | CMD_BASE;
     pub const CMD_SPISETCLOCKDIVISOR: u8 =  0x23 | CMD_BASE;
-    pub const CMD_SPISETSPIMODE: u8 =       0x24 | CMD_BASE;
+    pub const CMD_SPISETMODE: u8 =          0x24 | CMD_BASE;
     pub const CMD_SPISETROLE: u8 =          0x25 | CMD_BASE;
     pub const CMD_SPISETFRAME: u8 =         0x26 | CMD_BASE;
 
@@ -42,8 +42,8 @@ mod commands {
     pub const CMD_I2CWRITE: u8 =            0x31 | CMD_BASE;
     pub const CMD_I2CREAD: u8 =             0x32 | CMD_BASE;
     pub const CMD_I2CDISABLE: u8 =          0x33 | CMD_BASE;
-    pub const CMD_SPISETMODE: u8 =          0x34 | CMD_BASE;
-    pub const CMD_SPISETSLAVEADDRESS: u8 =  0x35 | CMD_BASE;
+    pub const CMD_I2CSETMODE: u8 =          0x34 | CMD_BASE;
+    pub const CMD_I2CSETSLAVEADDRESS: u8 =  0x35 | CMD_BASE;
 
     // UART
     pub const CMD_UARTENABLE: u8 =          0x40 | CMD_BASE;
