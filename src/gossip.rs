@@ -33,6 +33,12 @@ enum State {
     GPIOWriteAnalogValueValue,
     GPIOWritePwmValuePin,
     GPIOWritePwmValueValue,
+    GPIOGetPull,
+    GPIOReadDigitalValue,
+    GPIOReadAnalogValue,
+    GPIOReadPwmValue,
+    GPIOGetDirection,
+    GPIOSetInterrupt,
     ExpectRepeatCommand,
 }
 
@@ -124,7 +130,7 @@ trait GPIO {
     fn get_direction(&mut self) -> u8;
     fn read_digital_value(&mut self) -> u8;
     fn read_analog_value(&mut self) -> u8;
-    fn read_pwm_value(&mut self) -> u8;
+    fn read_pulse_length(&mut self) -> u8;
     fn set_interrupt(&mut self, interrupt: u8);
 }
 
@@ -399,6 +405,56 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
                 self.gpio[self.pin as uint].write_pwm_value(byte);
                 self.state = State::Idle;
             },
+            (State::Idle, commands::CMD_GPIO_GET_PULL) |
+            (State::SPIEnable, commands::CMD_GPIO_GET_PULL) |
+            (State::I2CEnable, commands::CMD_GPIO_GET_PULL) |
+            (State::UARTEnable, commands::CMD_GPIO_GET_PULL) => {
+                self.state = State::GPIOGetPull;
+            },
+            (State::GPIOGetPull, _) => {
+                self.state = State::Idle;
+                //self.gpio[byte].get_pull()
+            },
+            (State::Idle, commands::CMD_GPIO_GET_DIRECTION) |
+            (State::SPIEnable, commands::CMD_GPIO_GET_DIRECTION) |
+            (State::I2CEnable, commands::CMD_GPIO_GET_DIRECTION) |
+            (State::UARTEnable, commands::CMD_GPIO_GET_DIRECTION) => {
+                self.state = State::GPIOGetDirection;
+            },
+            (State::GPIOGetDirection, _) => {
+                self.state = State::Idle;
+                //self.gpio[byte].get_direction()
+            },
+            (State::Idle, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
+            (State::SPIEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
+            (State::I2CEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
+            (State::UARTEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) => {
+                self.state = State::GPIOReadDigitalValue;
+            },
+            (State::GPIOReadDigitalValue, _) => {
+                self.state = State::Idle;
+                // self.gpio[byte].read_digital_value();
+            },
+            (State::Idle, commands::CMD_GPIO_READ_ANALOG_VALUE) |
+            (State::SPIEnable, commands::CMD_GPIO_READ_ANALOG_VALUE) |
+            (State::I2CEnable, commands::CMD_GPIO_READ_ANALOG_VALUE) |
+            (State::UARTEnable, commands::CMD_GPIO_READ_ANALOG_VALUE) => {
+                self.state = State::GPIOReadAnalogValue;
+            },
+            (State::GPIOReadAnalogValue, _) => {
+                self.state = State::Idle;
+                // self.gpio[byte].read_analog_value();
+            },
+            (State::Idle, commands::CMD_GPIO_READ_PULSE_LENGTH) |
+            (State::SPIEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) |
+            (State::I2CEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) |
+            (State::UARTEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) => {
+                self.state = State::GPIOReadPwmValue;
+            },
+            (State::GPIOReadPwmValue, _) => {
+                self.state = State::Idle;
+                // self.gpio[byte].read_pulse_length();
+            },
             _ => nop(),
         }
 
@@ -565,7 +621,7 @@ mod test {
         fn read_analog_value(&mut self) -> u8 {
             self.analog_value
         }
-        fn read_pwm_value(&mut self) -> u8 {
+        fn read_pulse_length(&mut self) -> u8 {
             self.pwm_value
         }
         fn set_interrupt(&mut self, interrupt: u8) {
@@ -980,7 +1036,7 @@ mod test {
     }
 
     #[test]
-    fn test_gpio_config() {
+    fn test_gpio_sets() {
         let mut m = MockMCU::new();
         let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let pin: u8 = 5;
@@ -1031,6 +1087,50 @@ mod test {
         s.handle_byte(pwm_value);
         assert_eq!(s.gpio[pin as uint].pwm_value, pwm_value);
         assert_eq!(s.state, State::Idle);
+    }
+
+    #[test]
+    fn test_gpio_gets() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
+        let pin: u8 = 5;
+        s.handle_byte(commands::CMD_GPIO_GET_PULL);
+        assert_eq!(s.state, State::GPIOGetPull);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::Idle);
+        // let r = s.return_byte();
+        // assert_eq!(r,0);
+        s.handle_byte(commands::CMD_GPIO_GET_DIRECTION);
+        assert_eq!(s.state, State::GPIOGetDirection);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::Idle);
+        // r = s.return_byte();
+        // assert_eq!(r,0);
+    }
+
+    #[test]
+    fn test_gpio_reads() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
+        let pin: u8 = 5;
+        s.handle_byte(commands::CMD_GPIO_READ_DIGITAL_VALUE);
+        assert_eq!(s.state, State::GPIOReadDigitalValue);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::Idle);
+        // let r = s.return_byte();
+        // assert_eq!(r,0);
+        s.handle_byte(commands::CMD_GPIO_READ_ANALOG_VALUE);
+        assert_eq!(s.state, State::GPIOReadAnalogValue);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::Idle);
+        // r = s.return_byte();
+        // assert_eq!(r,0);
+        s.handle_byte(commands::CMD_GPIO_READ_PULSE_LENGTH);
+        assert_eq!(s.state, State::GPIOReadPwmValue);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::Idle);
+        // r = s.return_byte();
+        // assert_eq!(r,0);
     }
 
     #[test]
