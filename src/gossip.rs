@@ -3,7 +3,7 @@
 extern crate log;
 
 #[deriving(Copy, Eq, PartialEq, Clone, Show)]
-enum State {
+pub enum State {
     Idle,
     SPIEnable, 
     SPITransfer,
@@ -137,14 +137,14 @@ trait GPIO {
     fn set_interrupt(&mut self, interrupt: u8);
 }
 
-struct IOStateMachine<'a, SPIT: 'a, I2CT: 'a, UARTT: 'a, GPIOT: 'a> {
-    state: State,
-    repeat_remaining: u8,
-    pin: u8,
-    spi: &'a mut SPIT,
-    i2c: &'a mut I2CT,
-    uart: &'a mut UARTT,
-    gpio: &'a mut [GPIOT],
+pub struct IOStateMachine<'a, SPIT: 'a, I2CT: 'a, UARTT: 'a, GPIOT: 'a> {
+    pub state: State,
+    pub repeat_remaining: u8,
+    pub pin: u8,
+    pub spi: &'a mut SPIT,
+    pub i2c: &'a mut I2CT,
+    pub uart: &'a mut UARTT,
+    pub gpio: &'a mut [GPIOT],
 }
 
 impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> where SPIT: SPI, I2CT: I2C, UARTT: UART, GPIOT: GPIO {
@@ -159,7 +159,7 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
         || self.state == State::UARTEnable)
     }
 
-    fn handle_byte(&mut self, byte: u8) {
+    pub fn handle_byte(&mut self, byte: u8) {
         debug!("Received byte {}", byte);
 
         // If this is a repeat command
@@ -480,6 +480,7 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
 }
 
 fn nop() {
+    println!("NOPING!");
 }
 
 fn sleep() {
@@ -488,7 +489,7 @@ fn sleep() {
 
 
 //#[cfg(test)]
-mod test {
+pub mod test {
     use super::State;
     use super::IOStateMachine;
     use super::commands;
@@ -498,13 +499,13 @@ mod test {
     use super::GPIO;
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
-    struct MockSPI {
-        enable: bool,
-        clock_speed_divisor: u8,
-        out_reg: u8,
-        mode: u8,
-        frame: u8,
-        role: u8,
+    pub struct MockSPI {
+        pub enable: bool,
+        pub clock_speed_divisor: u8,
+        pub out_reg: u8,
+        pub mode: u8,
+        pub frame: u8,
+        pub role: u8,
     }
 
     impl SPI for MockSPI {
@@ -535,11 +536,11 @@ mod test {
     }
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
-    struct MockI2C {
-        enable : bool,
-        slave_address: u8,
-        mode : u8,
-        out_reg : u8,
+    pub struct MockI2C {
+        pub enable : bool,
+        pub slave_address: u8,
+        pub mode : u8,
+        pub out_reg : u8,
     }
 
     impl I2C for MockI2C {
@@ -564,13 +565,13 @@ mod test {
     }
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
-    struct MockUART {
-        enable : bool,
-        baudrate: u8,
-        parity : u8,
-        stop_bits: u8,
-        data_bits : u8,
-        out_reg : u8,
+    pub struct MockUART {
+        pub enable : bool,
+        pub baudrate: u8,
+        pub parity : u8,
+        pub stop_bits: u8,
+        pub data_bits : u8,
+        pub out_reg : u8,
     }
 
     impl UART for MockUART {
@@ -598,13 +599,13 @@ mod test {
     }
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
-    struct MockGPIO {
-        pull : u8,
-        direction: u8,
-        digital_value : u8,
-        analog_value: u8,
-        pwm_value : u8,
-        interrupt : u8,
+    pub struct MockGPIO {
+        pub pull : u8,
+        pub direction: u8,
+        pub digital_value : u8,
+        pub analog_value: u8,
+        pub pwm_value : u8,
+        pub interrupt : u8,
     }
 
     impl GPIO for MockGPIO {
