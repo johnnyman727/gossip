@@ -27,6 +27,12 @@ enum State {
     GPIOSetPullValue,
     GPIOSetDirectionPin,
     GPIOSetDirectionValue,
+    GPIOWriteDigitalValuePin,
+    GPIOWriteDigitalValueValue,
+    GPIOWriteAnalogValuePin,
+    GPIOWriteAnalogValueValue,
+    GPIOWritePwmValuePin,
+    GPIOWritePwmValueValue,
     ExpectRepeatCommand,
 }
 
@@ -358,6 +364,39 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             },
             (State::GPIOSetDirectionValue, _) => {
                 self.gpio[self.pin as uint].set_direction(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_GPIO_WRITE_DIGITAL_VALUE) => {
+                self.state = State::GPIOWriteDigitalValuePin;
+            },
+            (State::GPIOWriteDigitalValuePin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOWriteDigitalValueValue;
+            },
+            (State::GPIOWriteDigitalValueValue, _) => {
+                self.gpio[self.pin as uint].write_digital_value(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_GPIO_WRITE_ANALOG_VALUE) => {
+                self.state = State::GPIOWriteAnalogValuePin;
+            },
+            (State::GPIOWriteAnalogValuePin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOWriteAnalogValueValue;
+            },
+            (State::GPIOWriteAnalogValueValue, _) => {
+                self.gpio[self.pin as uint].write_analog_value(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_GPIO_WRITE_PWM_VALUE) => {
+                self.state = State::GPIOWritePwmValuePin;
+            },
+            (State::GPIOWritePwmValuePin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOWritePwmValueValue;
+            },
+            (State::GPIOWritePwmValueValue, _) => {
+                self.gpio[self.pin as uint].write_pwm_value(byte);
                 self.state = State::Idle;
             },
             _ => nop(),
@@ -940,7 +979,7 @@ mod test {
         assert_eq!(s.state, State::Idle);
     }
 
-      #[test]
+    #[test]
     fn test_gpio_config() {
         let mut m = MockMCU::new();
         let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
@@ -960,6 +999,37 @@ mod test {
         assert_eq!(s.state, State::GPIOSetDirectionValue);
         s.handle_byte(direction);
         assert_eq!(s.gpio[pin as uint].direction, direction);
+        assert_eq!(s.state, State::Idle);
+    }
+
+    #[test]
+    fn test_gpio_writes() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
+        let pin: u8 = 5;
+        let digital_value: u8 = 6;
+        let analog_value: u8 = 7;
+        let pwm_value: u8 = 8;
+        s.handle_byte(commands::CMD_GPIO_WRITE_DIGITAL_VALUE);
+        assert_eq!(s.state, State::GPIOWriteDigitalValuePin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOWriteDigitalValueValue);
+        s.handle_byte(digital_value);
+        assert_eq!(s.gpio[pin as uint].digital_value, digital_value);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_GPIO_WRITE_ANALOG_VALUE);
+        assert_eq!(s.state, State::GPIOWriteAnalogValuePin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOWriteAnalogValueValue);
+        s.handle_byte(analog_value);
+        assert_eq!(s.gpio[pin as uint].analog_value, analog_value);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_GPIO_WRITE_PWM_VALUE);
+        assert_eq!(s.state, State::GPIOWritePwmValuePin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOWritePwmValueValue);
+        s.handle_byte(pwm_value);
+        assert_eq!(s.gpio[pin as uint].pwm_value, pwm_value);
         assert_eq!(s.state, State::Idle);
     }
 
