@@ -28,39 +28,52 @@ enum State {
 
 mod commands {
     // Base Addr
-    pub const CMD_BASE: u8 =                0x80;
+    pub const CMD_BASE: u8 =                            0x80;
 
     // General Ops
-    pub const CMD_NOP: u8 =                 0x00;
-    pub const CMD_SLEEP: u8 =               0x10 | CMD_BASE;
+    pub const CMD_NOP: u8 =                             0x00;
+    pub const CMD_SLEEP: u8 =                           0x10 | CMD_BASE;
 
-    // SPI
-    pub const CMD_SPIENABLE: u8 =           0x20 | CMD_BASE;
-    pub const CMD_SPITRANSFER: u8 =         0x21 | CMD_BASE;
-    pub const CMD_SPIDISABLE: u8 =          0x22 | CMD_BASE;
-    pub const CMD_SPISETCLOCKDIVISOR: u8 =  0x23 | CMD_BASE;
-    pub const CMD_SPISETMODE: u8 =          0x24 | CMD_BASE;
-    pub const CMD_SPISETROLE: u8 =          0x25 | CMD_BASE;
-    pub const CMD_SPISETFRAME: u8 =         0x26 | CMD_BASE;
+    // SPI          
+    pub const CMD_SPIENABLE: u8 =                       0x20 | CMD_BASE;
+    pub const CMD_SPITRANSFER: u8 =                     0x21 | CMD_BASE;
+    pub const CMD_SPIDISABLE: u8 =                      0x22 | CMD_BASE;
+    pub const CMD_SPISETCLOCKDIVISOR: u8 =              0x23 | CMD_BASE;
+    pub const CMD_SPISETMODE: u8 =                      0x24 | CMD_BASE;
+    pub const CMD_SPISETROLE: u8 =                      0x25 | CMD_BASE;
+    pub const CMD_SPISETFRAME: u8 =                     0x26 | CMD_BASE;
 
-    // I2C
-    pub const CMD_I2CENABLE: u8 =           0x30 | CMD_BASE;
-    pub const CMD_I2CWRITE: u8 =            0x31 | CMD_BASE;
-    pub const CMD_I2CREAD: u8 =             0x32 | CMD_BASE;
-    pub const CMD_I2CDISABLE: u8 =          0x33 | CMD_BASE;
-    pub const CMD_I2CSETMODE: u8 =          0x34 | CMD_BASE;
-    pub const CMD_I2CSETSLAVEADDRESS: u8 =  0x35 | CMD_BASE;
+    // I2C          
+    pub const CMD_I2CENABLE: u8 =                       0x30 | CMD_BASE;
+    pub const CMD_I2CWRITE: u8 =                        0x31 | CMD_BASE;
+    pub const CMD_I2CREAD: u8 =                         0x32 | CMD_BASE;
+    pub const CMD_I2CDISABLE: u8 =                      0x33 | CMD_BASE;
+    pub const CMD_I2CSETMODE: u8 =                      0x34 | CMD_BASE;
+    pub const CMD_I2CSETSLAVEADDRESS: u8 =              0x35 | CMD_BASE;
 
     // UART
-    pub const CMD_UARTENABLE: u8 =          0x40 | CMD_BASE;
-    pub const CMD_UARTTRANSFER: u8 =        0x41 | CMD_BASE;
-    pub const CMD_UARTRECEIVE: u8 =         0x42 | CMD_BASE;
-    pub const CMD_UARTDISABLE: u8 =         0x43 | CMD_BASE;
-    pub const CMD_UARTSETBAUDRATE: u8 =     0x44 | CMD_BASE;
-    pub const CMD_UARTSETDATABITS: u8 =     0x45 | CMD_BASE;
-    pub const CMD_UARTSETPARITY: u8 =       0x46 | CMD_BASE;
-    pub const CMD_UARTSETSTOPBITS: u8 =     0x47 | CMD_BASE;
+    pub const CMD_UARTENABLE: u8 =                      0x40 | CMD_BASE;
+    pub const CMD_UARTTRANSFER: u8 =                    0x41 | CMD_BASE;
+    pub const CMD_UARTRECEIVE: u8 =                     0x42 | CMD_BASE;
+    pub const CMD_UARTDISABLE: u8 =                     0x43 | CMD_BASE;
+    pub const CMD_UARTSETBAUDRATE: u8 =                 0x44 | CMD_BASE;
+    pub const CMD_UARTSETDATABITS: u8 =                 0x45 | CMD_BASE;
+    pub const CMD_UARTSETPARITY: u8 =                   0x46 | CMD_BASE;
+    pub const CMD_UARTSETSTOPBITS: u8 =                 0x47 | CMD_BASE;
 
+    // GPIO
+    pub const CMD_GPIO_SET_PULL: u8 =                   0x50 | CMD_BASE;
+    pub const CMD_GPIO_SET_DIRECTION: u8 =              0x51 | CMD_BASE;
+    pub const CMD_GPIO_WRITE_DIGITAL_VALUE: u8 =        0x52 | CMD_BASE;
+    pub const CMD_GPIO_WRITE_ANALOG_VALUE: u8 =         0x53 | CMD_BASE;
+    pub const CMD_GPIO_WRITE_ANALOG_VALUE: u8 =         0x54 | CMD_BASE;
+    pub const CMD_GPIO_WRITE_PWM_VALUE: u8 =            0x55 | CMD_BASE;
+    pub const CMD_GPIO_GET_PULL: u8 =                   0x56 | CMD_BASE;
+    pub const CMD_GPIO_GET_DIRECTION: u8 =              0x57 | CMD_BASE;
+    pub const CMD_GPIO_READ_DIGITAL_VALUE: u8 =         0x58 | CMD_BASE;
+    pub const CMD_GPIO_READ_ANALOG_VALUE: u8 =          0x59 | CMD_BASE;
+    pub const CMD_GPIO_READ_PULSE_LENGTH: u8 =          0x5a | CMD_BASE;
+    pub const CMD_GPIO_SET_INTERRUPT: u8 =              0x5b | CMD_BASE;
 }
 
 trait SPI {
