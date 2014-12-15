@@ -36,9 +36,12 @@ enum State {
     GPIOGetPull,
     GPIOReadDigitalValue,
     GPIOReadAnalogValue,
-    GPIOReadPwmValue,
+    
+    GPIOReadPulseLength,
     GPIOGetDirection,
-    GPIOSetInterrupt,
+
+    GPIOSetInterruptPin,
+    GPIOSetInterruptValue,
     ExpectRepeatCommand,
 }
 
@@ -449,11 +452,22 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             (State::SPIEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) |
             (State::I2CEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) |
             (State::UARTEnable, commands::CMD_GPIO_READ_PULSE_LENGTH) => {
-                self.state = State::GPIOReadPwmValue;
+                self.state = State::GPIOReadPulseLength;
             },
-            (State::GPIOReadPwmValue, _) => {
+            (State::GPIOReadPulseLength, _) => {
                 self.state = State::Idle;
                 // self.gpio[byte].read_pulse_length();
+            },
+            (_, commands::CMD_GPIO_SET_INTERRUPT) => {
+                self.state = State::GPIOSetInterruptPin;
+            },
+            (State::GPIOSetInterruptPin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOSetInterruptValue;
+            },
+            (State::GPIOSetInterruptValue, _) => {
+                self.gpio[self.pin as uint].set_interrupt(byte);
+                self.state = State::Idle;
             },
             _ => nop(),
         }
@@ -1126,11 +1140,26 @@ mod test {
         // r = s.return_byte();
         // assert_eq!(r,0);
         s.handle_byte(commands::CMD_GPIO_READ_PULSE_LENGTH);
-        assert_eq!(s.state, State::GPIOReadPwmValue);
+        assert_eq!(s.state, State::GPIOReadPulseLength);
         s.handle_byte(pin);
         assert_eq!(s.state, State::Idle);
         // r = s.return_byte();
         // assert_eq!(r,0);
+    }
+
+    #[test]
+    fn test_gpio_set_interrupt() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
+        let pin: u8 = 5;
+        let interrupt: u8 = 6;
+        s.handle_byte(commands::CMD_GPIO_SET_INTERRUPT);
+        assert_eq!(s.state, State::GPIOSetInterruptPin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOSetInterruptValue);
+        s.handle_byte(interrupt);
+        assert_eq!(s.gpio[pin as uint].interrupt, interrupt);
+        assert_eq!(s.state, State::Idle);
     }
 
     #[test]
