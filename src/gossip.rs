@@ -23,6 +23,10 @@ enum State {
     UARTSetDataBits,
     UARTSetParity,
     UARTSetStopBits,
+    GPIOSetPullPin,
+    GPIOSetPullValue,
+    GPIOSetDirectionPin,
+    GPIOSetDirectionValue,
     ExpectRepeatCommand,
 }
 
@@ -66,24 +70,23 @@ mod commands {
     pub const CMD_GPIO_SET_DIRECTION: u8 =              0x51 | CMD_BASE;
     pub const CMD_GPIO_WRITE_DIGITAL_VALUE: u8 =        0x52 | CMD_BASE;
     pub const CMD_GPIO_WRITE_ANALOG_VALUE: u8 =         0x53 | CMD_BASE;
-    pub const CMD_GPIO_WRITE_ANALOG_VALUE: u8 =         0x54 | CMD_BASE;
-    pub const CMD_GPIO_WRITE_PWM_VALUE: u8 =            0x55 | CMD_BASE;
-    pub const CMD_GPIO_GET_PULL: u8 =                   0x56 | CMD_BASE;
-    pub const CMD_GPIO_GET_DIRECTION: u8 =              0x57 | CMD_BASE;
-    pub const CMD_GPIO_READ_DIGITAL_VALUE: u8 =         0x58 | CMD_BASE;
-    pub const CMD_GPIO_READ_ANALOG_VALUE: u8 =          0x59 | CMD_BASE;
-    pub const CMD_GPIO_READ_PULSE_LENGTH: u8 =          0x5a | CMD_BASE;
-    pub const CMD_GPIO_SET_INTERRUPT: u8 =              0x5b | CMD_BASE;
+    pub const CMD_GPIO_WRITE_PWM_VALUE: u8 =            0x54 | CMD_BASE;
+    pub const CMD_GPIO_GET_PULL: u8 =                   0x55 | CMD_BASE;
+    pub const CMD_GPIO_GET_DIRECTION: u8 =              0x56 | CMD_BASE;
+    pub const CMD_GPIO_READ_DIGITAL_VALUE: u8 =         0x57 | CMD_BASE;
+    pub const CMD_GPIO_READ_ANALOG_VALUE: u8 =          0x58 | CMD_BASE;
+    pub const CMD_GPIO_READ_PULSE_LENGTH: u8 =          0x59 | CMD_BASE;
+    pub const CMD_GPIO_SET_INTERRUPT: u8 =              0x5a | CMD_BASE;
 }
 
 trait SPI {
     fn enable(&mut self);
     fn transfer(&mut self, byte: u8) -> u8;
     fn disable(&mut self);
-    fn setClockSpeedDivisor(&mut self, divisor: u8);
-    fn setMode(&mut self, mode: u8);
-    fn setRole(&mut self, role: u8);
-    fn setFrame(&mut self, frame: u8);
+    fn set_clock_speed_divisor(&mut self, divisor: u8);
+    fn set_mode(&mut self, mode: u8);
+    fn set_role(&mut self, role: u8);
+    fn set_frame(&mut self, frame: u8);
 }
 
 trait I2C {
@@ -91,29 +94,45 @@ trait I2C {
     fn write(&mut self, byte: u8);
     fn read(&mut self) -> u8;
     fn disable(&mut self);
-    fn setSlaveAddress(&mut self, address: u8);
-    fn setMode(&mut self, mode: u8);
+    fn set_slave_address(&mut self, address: u8);
+    fn set_mode(&mut self, mode: u8);
 }
 
 trait UART {
     fn enable(&mut self);
     fn transfer(&mut self, byte: u8);
     fn disable(&mut self);
-    fn setBaudrate(&mut self, baudrate: u8);
-    fn setDataBits(&mut self, data_bits: u8);
-    fn setParity(&mut self, parity: u8);
-    fn setStopBits(&mut self, stop_bits: u8);
+    fn set_baudrate(&mut self, baudrate: u8);
+    fn set_data_bits(&mut self, data_bits: u8);
+    fn set_parity(&mut self, parity: u8);
+    fn set_stop_bits(&mut self, stop_bits: u8);
 }
 
-struct IOStateMachine<'a, SPIT: 'a, I2CT: 'a, UARTT: 'a> {
+trait GPIO {
+    fn set_pull(&mut self, pull: u8);
+    fn set_direction(&mut self, direction: u8);
+    fn write_digital_value(&mut self, value: u8);
+    fn write_analog_value(&mut self, value: u8);
+    fn write_pwm_value(&mut self, value: u8);
+    fn get_pull(&mut self) -> u8;
+    fn get_direction(&mut self) -> u8;
+    fn read_digital_value(&mut self) -> u8;
+    fn read_analog_value(&mut self) -> u8;
+    fn read_pwm_value(&mut self) -> u8;
+    fn set_interrupt(&mut self, interrupt: u8);
+}
+
+struct IOStateMachine<'a, SPIT: 'a, I2CT: 'a, UARTT: 'a, GPIOT: 'a> {
     state: State,
     repeat_remaining: u8,
+    pin: u8,
     spi: &'a mut SPIT,
     i2c: &'a mut I2CT,
     uart: &'a mut UARTT,
+    gpio: &'a mut [GPIOT],
 }
 
-impl<'a, SPIT, I2CT, UARTT> IOStateMachine<'a, SPIT, I2CT, UARTT> where SPIT: SPI, I2CT: I2C, UARTT: UART {
+impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> where SPIT: SPI, I2CT: I2C, UARTT: UART, GPIOT: GPIO {
 
     fn is_repeat_token(&mut self, byte: u8) -> bool {
         byte < commands::CMD_BASE
@@ -207,28 +226,28 @@ impl<'a, SPIT, I2CT, UARTT> IOStateMachine<'a, SPIT, I2CT, UARTT> where SPIT: SP
                 self.state = State::SPISetClockDivisor;
             },
             (State::SPISetClockDivisor, _) => {
-                self.spi.setClockSpeedDivisor(byte);
+                self.spi.set_clock_speed_divisor(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_SPISETMODE) => {
                 self.state = State::SPISetMode;
             },
             (State::SPISetMode, _) => {
-                self.spi.setMode(byte);
+                self.spi.set_mode(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_SPISETFRAME) => {
                 self.state = State::SPISetFrame;
             },
             (State::SPISetFrame, _) => {
-                self.spi.setFrame(byte);
+                self.spi.set_frame(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_SPISETROLE) => {
                 self.state = State::SPISetRole;
             },
             (State::SPISetRole, _) => {
-                self.spi.setRole(byte);
+                self.spi.set_role(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_I2CENABLE) => {
@@ -264,14 +283,14 @@ impl<'a, SPIT, I2CT, UARTT> IOStateMachine<'a, SPIT, I2CT, UARTT> where SPIT: SP
                 self.state = State::I2CSetSlaveAddress;
             },
             (State::I2CSetSlaveAddress, _) => {
-                self.i2c.setSlaveAddress(byte);
+                self.i2c.set_slave_address(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_I2CSETMODE) => {
                 self.state = State::I2CSetMode;
             },
             (State::I2CSetMode, _) => {
-                self.i2c.setMode(byte);
+                self.i2c.set_mode(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_UARTENABLE) => {
@@ -295,28 +314,50 @@ impl<'a, SPIT, I2CT, UARTT> IOStateMachine<'a, SPIT, I2CT, UARTT> where SPIT: SP
                 self.state = State::UARTSetBaudrate;
             },
             (State::UARTSetBaudrate, _) => {
-                self.uart.setBaudrate(byte);
+                self.uart.set_baudrate(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_UARTSETSTOPBITS) => {
                 self.state = State::UARTSetStopBits;
             },
             (State::UARTSetStopBits, _) => {
-                self.uart.setStopBits(byte);
+                self.uart.set_stop_bits(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_UARTSETPARITY) => {
                 self.state = State::UARTSetParity;
             },
             (State::UARTSetParity, _) => {
-                self.uart.setParity(byte);
+                self.uart.set_parity(byte);
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_UARTSETDATABITS) => {
                 self.state = State::UARTSetDataBits;
             },
             (State::UARTSetDataBits, _) => {
-                self.uart.setDataBits(byte);
+                self.uart.set_data_bits(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_GPIO_SET_PULL) => {
+                self.state = State::GPIOSetPullPin;
+            },
+            (State::GPIOSetPullPin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOSetPullValue;
+            },
+            (State::GPIOSetPullValue, _) => {
+                self.gpio[self.pin as uint].set_pull(byte);
+                self.state = State::Idle;
+            },
+            (State::Idle, commands::CMD_GPIO_SET_DIRECTION) => {
+                self.state = State::GPIOSetDirectionPin;
+            },
+            (State::GPIOSetDirectionPin, _) => {
+                self.pin = byte;
+                self.state = State::GPIOSetDirectionValue;
+            },
+            (State::GPIOSetDirectionValue, _) => {
+                self.gpio[self.pin as uint].set_direction(byte);
                 self.state = State::Idle;
             },
             _ => nop(),
@@ -345,6 +386,7 @@ mod test {
     use super::SPI;
     use super::I2C;
     use super::UART;
+    use super::GPIO;
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
     struct MockSPI {
@@ -369,16 +411,16 @@ mod test {
         fn disable(&mut self) {
             self.enable = false;
         }
-        fn setClockSpeedDivisor(&mut self, divisor: u8) {
+        fn set_clock_speed_divisor(&mut self, divisor: u8) {
             self.clock_speed_divisor = divisor;
         }
-        fn setMode(&mut self, mode: u8) {
+        fn set_mode(&mut self, mode: u8) {
             self.mode = mode;
         }
-        fn setRole(&mut self, role: u8) {
+        fn set_role(&mut self, role: u8) {
             self.role = role;
         }
-        fn setFrame(&mut self, frame: u8) {
+        fn set_frame(&mut self, frame: u8) {
             self.frame = frame;
         }
     }
@@ -404,10 +446,10 @@ mod test {
         fn disable(&mut self) {
             self.enable = false;
         }
-        fn setSlaveAddress(&mut self, address: u8) {
+        fn set_slave_address(&mut self, address: u8) {
             self.slave_address = address;
         }
-        fn setMode(&mut self, mode: u8) {
+        fn set_mode(&mut self, mode: u8) {
             self.mode = mode;
         }
     }
@@ -432,17 +474,63 @@ mod test {
         fn disable(&mut self) {
             self.enable = false;
         }
-        fn setBaudrate(&mut self, baudrate: u8) {
+        fn set_baudrate(&mut self, baudrate: u8) {
             self.baudrate = baudrate;
         }
-        fn setDataBits(&mut self, data_bits: u8) {
+        fn set_data_bits(&mut self, data_bits: u8) {
             self.data_bits = data_bits;
         }
-        fn setParity(&mut self, parity: u8) {
+        fn set_parity(&mut self, parity: u8) {
             self.parity = parity;
         }
-        fn setStopBits(&mut self, stop_bits: u8) {
+        fn set_stop_bits(&mut self, stop_bits: u8) {
             self.stop_bits = stop_bits;
+        }
+    }
+
+    #[deriving(Copy, Eq, PartialEq, Clone, Show)]
+    struct MockGPIO {
+        pull : u8,
+        direction: u8,
+        digital_value : u8,
+        analog_value: u8,
+        pwm_value : u8,
+        interrupt : u8,
+    }
+
+    impl GPIO for MockGPIO {
+        fn set_pull(&mut self, pull: u8) {
+            self.pull = pull;
+        }
+        fn set_direction(&mut self, direction: u8) {
+            self.direction = direction;
+        }
+        fn write_digital_value(&mut self, value: u8) {
+            self.digital_value = value;
+        }
+        fn write_analog_value(&mut self, value: u8) {
+            self.analog_value = value;
+        }
+        fn write_pwm_value(&mut self, value: u8) {
+            self.pwm_value = value;
+        }
+        fn get_pull(&mut self) -> u8 {
+            self.pull
+        }
+        fn get_direction(&mut self) -> u8 {
+            self.direction
+        }
+        fn read_digital_value(&mut self) -> u8 {
+            self.digital_value
+        }
+        fn read_analog_value(&mut self) -> u8 {
+            self.analog_value
+        }
+        fn read_pwm_value(&mut self) -> u8 {
+            self.pwm_value
+        }
+        fn set_interrupt(&mut self, interrupt: u8) {
+            self.interrupt = interrupt;
         }
     }
 
@@ -450,15 +538,17 @@ mod test {
         spi: MockSPI,
         i2c: MockI2C,
         uart: MockUART,
+        gpio: [MockGPIO, ..8],
     }
 
 
     impl MockMCU{
         fn new() -> MockMCU {
-            MockMCU{
+            MockMCU {
                 spi : MockSPI{enable:false, clock_speed_divisor: 0, out_reg: 0, mode: 0, frame: 0, role: 0} ,
                 i2c : MockI2C{enable: false, out_reg: 0, slave_address: 0, mode: 0}, 
-                uart : MockUART{enable: false, out_reg: 0, baudrate: 0, parity: 0, data_bits: 0, stop_bits: 0}
+                uart : MockUART{enable: false, out_reg: 0, baudrate: 0, parity: 0, data_bits: 0, stop_bits: 0},
+                gpio : [MockGPIO{pull: 0, direction: 0, digital_value: 0, analog_value: 0, pwm_value: 0, interrupt: 0}, ..8],
             }
         }
     }
@@ -467,7 +557,7 @@ mod test {
     #[test]
     fn test_handle_idle_spi_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
         assert_eq!(s.spi.enable, true);
@@ -476,7 +566,7 @@ mod test {
     #[test]
     fn test_repeat_token() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         assert_eq!(s.is_repeat_token(254), false);
         assert_eq!(s.is_repeat_token(0), true);
     }
@@ -484,7 +574,7 @@ mod test {
     #[test]
     fn test_repeat_nop() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(100);
         s.handle_byte(commands::CMD_NOP);
         assert_eq!(s.state, State::Idle);
@@ -493,7 +583,7 @@ mod test {
     #[test]
     fn test_repeat_sleep() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(100);
         s.handle_byte(commands::CMD_SLEEP);
         assert_eq!(s.state, State::Idle);
@@ -502,7 +592,7 @@ mod test {
     #[test]
     fn test_handle_spi_enable_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPIENABLE);
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
@@ -512,7 +602,7 @@ mod test {
     #[test]
     fn test_handle_spi_transfer() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let out: u8 = 200;
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
@@ -528,7 +618,7 @@ mod test {
     #[test]
     fn test_handle_spi_transfer_repeat() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let rep: u8 = 2;
         let out: u8 = 200;
         s.handle_byte(commands::CMD_SPIENABLE);
@@ -552,7 +642,7 @@ mod test {
     #[test]
     fn test_handle_spi_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
         assert_eq!(s.spi.enable, true);
@@ -564,7 +654,7 @@ mod test {
     #[test]
     fn test_handle_spi_transfer_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
         assert_eq!(s.spi.enable, true);
@@ -578,7 +668,7 @@ mod test {
     #[test]
     fn test_handle_spi_transfer_repeat_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let rep: u8 = 2;
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
@@ -595,7 +685,7 @@ mod test {
     #[test]
     fn test_spi_config() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let div: u8 = 2;
         let mode: u8 = 3;
         let frame: u8 = 4;
@@ -621,7 +711,7 @@ mod test {
     #[test]
     fn test_handle_i2c_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -630,7 +720,7 @@ mod test {
     #[test]
     fn test_handle_i2c_write() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let out: u8 = 100;
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
@@ -645,7 +735,7 @@ mod test {
     #[test]
     fn test_handle_i2c_write_repeat() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let out: u8 = 200;
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
@@ -668,7 +758,7 @@ mod test {
     #[test]
     fn test_handle_i2c_read() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -680,7 +770,7 @@ mod test {
     #[test]
     fn test_handle_i2c_read_repeat() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -701,7 +791,7 @@ mod test {
     #[test]
     fn test_handle_i2c_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -713,7 +803,7 @@ mod test {
      #[test]
     fn test_handle_i2c_write_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -727,7 +817,7 @@ mod test {
     #[test]
     fn test_handle_i2c_write_repeat_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let repeat: u8 = 2;
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
@@ -744,7 +834,7 @@ mod test {
     #[test]
     fn test_i2c_config() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let slave_address: u8 = 17;
         let mode: u8 = 3;
         s.handle_byte(commands::CMD_I2CSETSLAVEADDRESS);
@@ -760,7 +850,7 @@ mod test {
     #[test]
     fn test_handle_uart_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
         assert_eq!(s.uart.enable, true);
@@ -769,7 +859,7 @@ mod test {
     #[test]
     fn test_handle_uart_transfer() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let out: u8 = 200;
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
@@ -785,7 +875,7 @@ mod test {
     #[test]
     fn test_handle_uart_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
         assert_eq!(s.uart.enable, true);
@@ -797,7 +887,7 @@ mod test {
      #[test]
     fn test_handle_uart_write_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
         assert_eq!(s.uart.enable, true);
@@ -811,7 +901,7 @@ mod test {
     #[test]
     fn test_handle_uart_write_repeat_disable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let repeat: u8 = 2;
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
@@ -827,7 +917,7 @@ mod test {
       #[test]
     fn test_uart_config() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         let baudrate: u8 = 7;
         let stop_bits: u8 = 6;
         let parity: u8 = 5;
@@ -850,10 +940,33 @@ mod test {
         assert_eq!(s.state, State::Idle);
     }
 
+      #[test]
+    fn test_gpio_config() {
+        let mut m = MockMCU::new();
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
+        let pin: u8 = 5;
+        let pull: u8 = 6;
+        let direction: u8 = 7;
+        s.handle_byte(commands::CMD_GPIO_SET_PULL);
+        assert_eq!(s.state, State::GPIOSetPullPin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOSetPullValue);
+        s.handle_byte(pull);
+        assert_eq!(s.gpio[pin as uint].pull, pull);
+        assert_eq!(s.state, State::Idle);
+        s.handle_byte(commands::CMD_GPIO_SET_DIRECTION);
+        assert_eq!(s.state, State::GPIOSetDirectionPin);
+        s.handle_byte(pin);
+        assert_eq!(s.state, State::GPIOSetDirectionValue);
+        s.handle_byte(direction);
+        assert_eq!(s.gpio[pin as uint].direction, direction);
+        assert_eq!(s.state, State::Idle);
+    }
+
     #[test]
     fn test_handle_spi_write_while_uart_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_UARTENABLE);
         assert_eq!(s.state, State::UARTEnable);
         assert_eq!(s.uart.enable, true);
@@ -865,7 +978,7 @@ mod test {
     #[test]
     fn test_handle_spi_transfer_while_idle() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPITRANSFER);
         assert_eq!(s.state, State::Idle);
         assert_eq!(s.spi.enable, false);
@@ -874,7 +987,7 @@ mod test {
     #[test]
     fn test_handle_spi_enable_while_i2c_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_I2CENABLE);
         assert_eq!(s.state, State::I2CEnable);
         assert_eq!(s.i2c.enable, true);
@@ -886,7 +999,7 @@ mod test {
     #[test]
     fn test_zero_repeat_in_spi_enable() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.state, State::SPIEnable);
         assert_eq!(s.spi.enable, true);
@@ -898,7 +1011,7 @@ mod test {
     #[test]
     fn test_valid_state() {
         let mut m = MockMCU::new();
-        let mut s = IOStateMachine{state:State::Idle, repeat_remaining : 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart};
+        let mut s = IOStateMachine{state: State::Idle, repeat_remaining: 0, pin: 0, spi: &mut m.spi, i2c: &mut m.i2c, uart: &mut m.uart, gpio: &mut m.gpio };
         assert_eq!(s.is_valid_repeat_state(), false);
         s.handle_byte(commands::CMD_SPIENABLE);
         assert_eq!(s.is_valid_repeat_state(), true);
