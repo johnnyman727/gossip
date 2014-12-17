@@ -38,7 +38,8 @@ trait GPIO {
     fn read_digital_value(&mut self) -> u8;
     fn read_analog_value(&mut self) -> u8;
     fn read_pulse_length(&mut self) -> u8;
-    fn set_interrupt(&mut self, interrupt: u8);
+    fn set_interrupt_mode(&mut self, interrupt: u8);
+    fn get_interrupt_mode(&mut self) -> u8;
 }
 
 mod command {
@@ -47,44 +48,51 @@ mod command {
 
     // General Ops
     pub const NOP: u8 =                             0x00;
-    pub const SLEEP: u8 =                           0x10 | BASE;
+    pub const SLEEP: u8 =                           0x10;
 
-    // SPI          
-    pub const SPIENABLE: u8 =                       0x20 | BASE;
-    pub const SPITRANSFER: u8 =                     0x21 | BASE;
-    pub const SPIDISABLE: u8 =                      0x22 | BASE;
-    pub const SPISETCLOCKDIVISOR: u8 =              0x23 | BASE;
-    pub const SPISETMODE: u8 =                      0x24 | BASE;
-    pub const SPISETROLE: u8 =                      0x25 | BASE;
-    pub const SPISETFRAME: u8 =                     0x26 | BASE;
+    // SPI
+    pub const SPICMDBASE: u8 =                      0x20;
+    pub const SPIENABLE: u8 =                       0x20;
+    pub const SPITRANSFER: u8 =                     0x21;
+    pub const SPIDISABLE: u8 =                      0x22;
+    pub const SPISETCLOCKDIVISOR: u8 =              0x23;
+    pub const SPISETMODE: u8 =                      0x24;
+    pub const SPISETROLE: u8 =                      0x25;
+    pub const SPISETFRAME: u8 =                     0x26;
 
-    // I2C          
-    pub const I2CENABLE: u8 =                       0x30 | BASE;
-    pub const I2CWRITE: u8 =                        0x31 | BASE;
-    pub const I2CREAD: u8 =                         0x32 | BASE;
-    pub const I2CDISABLE: u8 =                      0x33 | BASE;
-    pub const I2CSETMODE: u8 =                      0x34 | BASE;
-    pub const I2CSETSLAVEADDRESS: u8 =              0x35 | BASE;
+    // I2C
+    pub const I2CCMDBASE: u8 =                      0x30;
+    pub const I2CENABLE: u8 =                       0x30;
+    pub const I2CWRITE: u8 =                        0x31;
+    pub const I2CREAD: u8 =                         0x32;
+    pub const I2CDISABLE: u8 =                      0x33;
+    pub const I2CSETMODE: u8 =                      0x34;
+    pub const I2CSETSLAVEADDRESS: u8 =              0x35;
 
     // UART
-    pub const UARTENABLE: u8 =                      0x40 | BASE;
-    pub const UARTTRANSFER: u8 =                    0x41 | BASE;
-    pub const UARTRECEIVE: u8 =                     0x42 | BASE;
-    pub const UARTDISABLE: u8 =                     0x43 | BASE;
-    pub const UARTSETBAUDRATE: u8 =                 0x44 | BASE;
-    pub const UARTSETDATABITS: u8 =                 0x45 | BASE;
-    pub const UARTSETPARITY: u8 =                   0x46 | BASE;
-    pub const UARTSETSTOPBITS: u8 =                 0x47 | BASE;
+    pub const UARTCMDBASE: u8 =                     0x40;
+    pub const UARTENABLE: u8 =                      0x40;
+    pub const UARTTRANSFER: u8 =                    0x41;
+    pub const UARTRECEIVE: u8 =                     0x42;
+    pub const UARTDISABLE: u8 =                     0x43;
+    pub const UARTSETBAUDRATE: u8 =                 0x44;
+    pub const UARTSETDATABITS: u8 =                 0x45;
+    pub const UARTSETPARITY: u8 =                   0x46;
+    pub const UARTSETSTOPBITS: u8 =                 0x47;
 
     // GPIO
-    pub const GPIO_SET_PULL: u8 =                   0x50 | BASE;
-    pub const GPIO_SET_STATE: u8 =                  0x51 | BASE;
-    pub const GPIO_WRITE_PWM_VALUE: u8 =            0x52 | BASE;
-    pub const GPIO_GET_PULL: u8 =                   0x53 | BASE;
-    pub const GPIO_GET_STATE: u8 =                  0x54 | BASE;
-    pub const GPIO_READ_PULSE_LENGTH: u8 =          0x55 | BASE;
-    pub const GPIO_SET_INTERRUPT: u8 =              0x56 | BASE;
+    pub const GPIOCMDBASE: u8 =                     0x50;
+    pub const GPIOSETPULL: u8 =                     0x50;
+    pub const GPIOSETSTATE: u8 =                    0x51;
+    pub const GPIOWRITEPWMVALUE: u8 =               0x52;
+    pub const GPIOGETPULL: u8 =                     0x53;
+    pub const GPIOGETSTATE: u8 =                    0x54;
+    pub const GPIOREADPULSELENGTH: u8 =             0x55;
+    pub const GPIOSETINTERRUPTMODE: u8 =            0x56;
+    pub const GPIOGETINTERRUPTMODE: u8 =            0x57;
 }
+
+const NO_CHANGE: u8 = 0xFF;
 
 #[deriving(Copy, Eq, PartialEq, Clone, Show)]
 pub enum CommState {
@@ -92,17 +100,17 @@ pub enum CommState {
     Idle,
 }
 
+
 pub struct SPIStateMachine<'a, S: 'a> {
     pub spi: &'a mut S,
     pub state: CommState,
-    pub transfer_length: u8,
 }
 
 impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
     fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
 
         let command = incoming[0];
-        println!("Command: {}", command);
+        println!("SPI Command: {0:x}", command);
         match (self.state, command) {
             (CommState::Idle, command::SPIENABLE) => {
                 self.spi.enable();
@@ -168,18 +176,88 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
     }
 }
 
-pub struct CommandRouter<'a, S: 'a> {
-    pub spi : &'a mut SPIStateMachine<'a, S>
+pub struct GPIOStateMachine<'a, G: 'a> {
+    pub gpios : &'a mut [G],
 }
 
-impl<'a, S> CommandRouter<'a, S> where S: SPI {
+impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
+    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+        let command = incoming[0];
+        let gpioIndex = incoming[1];
+        let ref mut gpio = self.gpios[gpioIndex as uint];
+         println!("GPIO Command: {0:x}", command);
+        match command {
+            command::GPIOSETPULL => {
+                gpio.set_pull(incoming[2]);
+                outgoing[0] = command;
+                1 as uint
+            },
+            command::GPIOSETSTATE => {
+                let new_value = incoming[2];
+                let new_direction = incoming[3];
+                println!("Setting {} {}", new_value, new_direction);
+                if new_value != NO_CHANGE {
+                    gpio.write_digital_value(incoming[2]);
+                }
+
+                if new_direction != NO_CHANGE {
+                    gpio.set_direction(incoming[3]);
+                }
+                
+                outgoing[0] = command;
+                1 as uint
+            },
+            command::GPIOWRITEPWMVALUE => {
+                gpio.write_pwm_value(incoming[2]);
+                outgoing[0] = command;
+                1 as uint
+            },
+            command::GPIOGETPULL => {
+                outgoing[0] = command;
+                outgoing[1] = gpio.get_pull();
+                2 as uint
+            },
+            command::GPIOGETSTATE => {
+                outgoing[0] = command;
+                println!("returning {} {}", gpio.read_digital_value(), gpio.get_direction());
+                outgoing[1] = gpio.read_digital_value();
+                outgoing[2] = gpio.get_direction();
+                3 as uint
+            },
+            command::GPIOREADPULSELENGTH => {
+                outgoing[0] = command;
+                outgoing[1] = gpio.read_pulse_length();
+                2 as uint
+            },
+            command::GPIOSETINTERRUPTMODE => {
+                gpio.set_interrupt_mode(incoming[2]);
+                outgoing[0] = command;
+                1 as uint
+            },
+            command::GPIOGETINTERRUPTMODE => {
+                outgoing[0] = command;
+                outgoing[1] = gpio.get_interrupt_mode();
+                2 as uint
+            },
+            _ => 0
+        }
+    }
+}
+
+pub struct CommandRouter<'a, S: 'a, G: 'a> {
+    pub spi : &'a mut SPIStateMachine<'a, S>,
+    pub gpio : &'a mut GPIOStateMachine<'a, G>
+
+}
+
+impl<'a, S, G> CommandRouter<'a, S, G> where S: SPI, G: GPIO {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
-        if command >= command::SPIENABLE || command <= command::SPISETFRAME {
-            self.spi.handle_buffer(incoming, outgoing)
-        }
-        else {
-            0
+        let command_type = command & 0xf0;
+        match command_type {
+            command::SPICMDBASE => self.spi.handle_buffer(incoming, outgoing),
+            command::GPIOCMDBASE => self.gpio.handle_buffer(incoming, outgoing),
+            _ => 0
         }
     }
 }
@@ -192,7 +270,7 @@ pub mod test {
     use super::SPI;
     // use super::I2C;
     // use super::UART;
-    // use super::GPIO;
+    use super::GPIO;
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
     pub struct MockSPI {
@@ -231,6 +309,58 @@ pub mod test {
         }
         fn set_frame(&mut self, frame: u8) {
             self.frame = frame;
+        }
+    }
+
+
+    #[deriving(Copy, Eq, PartialEq, Clone, Show)]
+    pub struct MockGPIO {
+        pub pull : u8,
+        pub direction: u8,
+        pub digital_value : u8,
+        pub analog_value: u8,
+        pub pwm_value : u8,
+        pub interrupt : u8,
+    }
+
+    impl GPIO for MockGPIO {
+        fn set_pull(&mut self, pull: u8) {
+            self.pull = pull;
+        }
+        fn set_direction(&mut self, direction: u8) {
+            self.direction = direction;
+            println!("You set the direction of this pin to: {}", self.direction);
+        }
+        fn write_digital_value(&mut self, value: u8) {
+            self.digital_value = value;
+            println!("You set the state of this pin to: {}", self.digital_value);
+        }
+        fn write_analog_value(&mut self, value: u8) {
+            self.analog_value = value;
+        }
+        fn write_pwm_value(&mut self, value: u8) {
+            self.pwm_value = value;
+        }
+        fn get_pull(&mut self) -> u8 {
+            self.pull
+        }
+        fn get_direction(&mut self) -> u8 {
+            self.direction
+        }
+        fn read_digital_value(&mut self) -> u8 {
+            self.digital_value
+        }
+        fn read_analog_value(&mut self) -> u8 {
+            self.analog_value
+        }
+        fn read_pulse_length(&mut self) -> u8 {
+            self.pwm_value
+        }
+        fn set_interrupt_mode(&mut self, interrupt: u8) {
+            self.interrupt = interrupt;
+        }
+        fn get_interrupt_mode(&mut self) -> u8 {
+            self.interrupt
         }
     }
 }
