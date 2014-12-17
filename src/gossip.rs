@@ -10,8 +10,8 @@ trait SPI {
 
 trait I2C {
     fn enable(&mut self);
-    fn write(&mut self, byte: u8);
-    fn read(&mut self) -> u8;
+    fn write(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
+    fn read(&mut self, length: u8, outgoing: &mut [u8]) -> uint;
     fn disable(&mut self);
     fn set_slave_address(&mut self, address: u8);
     fn set_mode(&mut self, mode: u8);
@@ -176,6 +176,70 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
     }
 }
 
+pub struct I2CStateMachine<'a, I: 'a> {
+    pub i2c: &'a mut I,
+    pub state: CommState,
+}
+
+impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
+    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+        let command = incoming[0];
+        println!("I2C Command: {}", command);
+        match (self.state, command) {
+            (CommState::Idle, command::I2CENABLE) => {
+                self.i2c.enable();
+                self.state = CommState::Enable;
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Idle, command::I2CDISABLE) => {
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Enable, command::I2CENABLE) => {
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Enable, command::I2CWRITE) => {
+                let length = incoming[1];
+                let payload = incoming.slice_from(2);
+                outgoing[0] = command;
+                outgoing[1] = length;
+                self.i2c.write(payload, outgoing.slice_from_mut(2)) + 2u
+            },
+            (CommState::Enable, command::I2CREAD) => {
+                let length = incoming[1];
+                outgoing[0] = command;
+                outgoing[1] = length;
+                self.i2c.read(length, outgoing.slice_from_mut(2)) + 2u
+            },
+            (CommState::Enable, command::I2CDISABLE) => {
+                self.i2c.disable();
+                self.state = CommState::Idle;
+                outgoing[0] = command::I2CDISABLE;
+                1 as uint
+            },
+            (_, command::I2CSETMODE) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.i2c.set_mode(param);
+                outgoing[0] = command::I2CSETMODE;
+                outgoing[1] = param;
+                2 as uint
+            },
+            (_, command::I2CSETSLAVEADDRESS) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.i2c.set_slave_address(param);
+                outgoing[0] = command::I2CSETSLAVEADDRESS;
+                outgoing[1] = param;
+                2 as uint 
+            },
+            _ => 0 as uint
+        }
+    }
+}
+
 pub struct GPIOStateMachine<'a, G: 'a> {
     pub gpios : &'a mut [G],
 }
@@ -244,13 +308,13 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
     }
 }
 
-pub struct CommandRouter<'a, S: 'a, G: 'a> {
+pub struct CommandRouter<'a, S: 'a, I: 'a, G: 'a> {
     pub spi : &'a mut SPIStateMachine<'a, S>,
+    pub i2c : &'a mut I2CStateMachine<'a, I>,
     pub gpio : &'a mut GPIOStateMachine<'a, G>
-
 }
 
-impl<'a, S, G> CommandRouter<'a, S, G> where S: SPI, G: GPIO {
+impl<'a, S, I, G> CommandRouter<'a, S, I, G> where S: SPI, I: I2C, G: GPIO {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
         let command_type = command & 0xf0;
@@ -268,7 +332,7 @@ pub mod test {
     use super::CommandRouter;
     use super::command;
     use super::SPI;
-    // use super::I2C;
+    use super::I2C;
     // use super::UART;
     use super::GPIO;
 
@@ -312,6 +376,42 @@ pub mod test {
         }
     }
 
+    #[deriving(Copy, Eq, PartialEq, Clone, Show)]
+    pub struct MockI2C {
+        pub enable : bool,
+        pub out_reg : u8,
+        pub slave_address: u8,
+        pub mode : u8,
+    }
+
+    impl I2C for MockI2C {
+        fn enable(&mut self) {
+            self.enable = true;
+        }
+        fn write(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+            if self.enable {
+                for x in range(0u, incoming.len()) {
+                    outgoing[x] = incoming[x];
+                }
+            }
+            incoming.len()
+        }
+        fn read(&mut self, length: u8, outgoing: &mut [u8]) -> uint {
+            for x in range(0u, length as uint) {
+                outgoing[x] = x as u8;
+            }
+            outgoing.len()
+        }
+        fn disable(&mut self) {
+            self.enable = false;
+        }
+        fn set_slave_address(&mut self, address: u8) {
+            self.slave_address = address;
+        }
+        fn set_mode(&mut self, mode: u8) {
+            self.mode = mode;
+        }
+    }
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
     pub struct MockGPIO {
