@@ -161,7 +161,16 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
         || self.state == State::UARTEnable)
     }
 
-    pub fn handle_byte(&mut self, byte: u8) {
+    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+        let mut written: uint = 0;
+        for byte in incoming.iter() {
+            println!("Got this byte! {}", byte);
+            written += self.handle_byte(*byte, outgoing.slice_from_mut(written));
+        }
+        written
+    }
+
+    pub fn handle_byte(&mut self, byte: u8, outgoing: &mut [u8]) -> uint {
         debug!("Received byte {}", byte);
 
         // TODO: Remove before production
@@ -173,7 +182,7 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             self.repeat_remaining = byte;
             // Set the state to be expecting the command to repeat
             self.state = State::ExpectRepeatCommand;
-            return
+            return 0;
         }
         // Repeat number has been set and we need to set the command that we will be repeating
         else if self.repeat_remaining != 0 && self.state == State::ExpectRepeatCommand {
@@ -209,7 +218,7 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
                 _ => nop(),
             } 
 
-            return;
+            return 0;
         }
 
         // This is a standard, one-time only command
@@ -381,15 +390,23 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_GPIO_WRITE_DIGITAL_VALUE) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_WRITE_DIGITAL_VALUE;
                 self.state = State::GPIOWriteDigitalValuePin;
+                return 1;
             },
             (State::GPIOWriteDigitalValuePin, _) => {
                 self.pin = byte;
                 self.state = State::GPIOWriteDigitalValueValue;
             },
             (State::GPIOWriteDigitalValueValue, _) => {
+                // ACK the byte that was sent
+                outgoing[0] = byte;
+                // Set the state of the pin
                 self.gpio[self.pin as uint].write_digital_value(byte);
+                // Update the state
                 self.state = State::Idle;
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_WRITE_ANALOG_VALUE) => {
                 self.state = State::GPIOWriteAnalogValuePin;
@@ -438,12 +455,15 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             (State::SPIEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
             (State::I2CEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
             (State::UARTEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_READ_DIGITAL_VALUE;
                 self.state = State::GPIOReadDigitalValue;
+                return 1;
             },
             (State::GPIOReadDigitalValue, _) => {
+                outgoing[0] = self.gpio[byte as uint].read_digital_value();
                 self.state = State::Idle;
-                // TODO: Replace this with actual byte return methodology
-                self.out = self.gpio[byte as uint].read_digital_value();
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_READ_ANALOG_VALUE) |
             (State::SPIEnable, commands::CMD_GPIO_READ_ANALOG_VALUE) |
@@ -479,6 +499,7 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             _ => nop(),
         }
 
+        0
     }
 
     pub fn return_byte(&self) -> u8 {
