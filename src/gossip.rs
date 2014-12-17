@@ -368,26 +368,41 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
                 self.state = State::Idle;
             },
             (State::Idle, commands::CMD_GPIO_SET_PULL) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_SET_PULL;
                 self.state = State::GPIOSetPullPin;
+                return 1;
             },
             (State::GPIOSetPullPin, _) => {
+                outgoing[0] = byte;
                 self.pin = byte;
                 self.state = State::GPIOSetPullValue;
+                return 1;
             },
             (State::GPIOSetPullValue, _) => {
                 self.gpio[self.pin as uint].set_pull(byte);
+                outgoing[0] = byte;
                 self.state = State::Idle;
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_SET_DIRECTION) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_SET_DIRECTION;
                 self.state = State::GPIOSetDirectionPin;
+                return 1;
             },
             (State::GPIOSetDirectionPin, _) => {
                 self.pin = byte;
+                // Echo the command being acknowledged
+                outgoing[0] = byte;
                 self.state = State::GPIOSetDirectionValue;
+                return 1;
             },
             (State::GPIOSetDirectionValue, _) => {
                 self.gpio[self.pin as uint].set_direction(byte);
+                outgoing[0] = byte;
                 self.state = State::Idle;
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_WRITE_DIGITAL_VALUE) => {
                 // Echo the command being acknowledged
@@ -397,7 +412,9 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             },
             (State::GPIOWriteDigitalValuePin, _) => {
                 self.pin = byte;
+                outgoing[0] = byte;
                 self.state = State::GPIOWriteDigitalValueValue;
+                return 1;
             },
             (State::GPIOWriteDigitalValueValue, _) => {
                 // ACK the byte that was sent
@@ -434,22 +451,29 @@ impl<'a, SPIT, I2CT, UARTT, GPIOT> IOStateMachine<'a, SPIT, I2CT, UARTT, GPIOT> 
             (State::SPIEnable, commands::CMD_GPIO_GET_PULL) |
             (State::I2CEnable, commands::CMD_GPIO_GET_PULL) |
             (State::UARTEnable, commands::CMD_GPIO_GET_PULL) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_GET_PULL;
                 self.state = State::GPIOGetPull;
+                return 1;
             },
             (State::GPIOGetPull, _) => {
+                outgoing[0] = self.gpio[byte as uint].get_pull();
                 self.state = State::Idle;
-                //self.gpio[byte].get_pull()
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_GET_DIRECTION) |
             (State::SPIEnable, commands::CMD_GPIO_GET_DIRECTION) |
             (State::I2CEnable, commands::CMD_GPIO_GET_DIRECTION) |
             (State::UARTEnable, commands::CMD_GPIO_GET_DIRECTION) => {
+                // Echo the command being acknowledged
+                outgoing[0] = commands::CMD_GPIO_GET_DIRECTION;
                 self.state = State::GPIOGetDirection;
+                return 1;
             },
             (State::GPIOGetDirection, _) => {
+                outgoing[0] = self.gpio[byte as uint].get_direction();
                 self.state = State::Idle;
-                // TODO: Replace this with actual byte return methodology
-                self.out = self.gpio[byte as uint].get_direction();
+                return 1;
             },
             (State::Idle, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
             (State::SPIEnable, commands::CMD_GPIO_READ_DIGITAL_VALUE) |
