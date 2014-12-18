@@ -1,4 +1,4 @@
-trait SPI {
+pub trait SPI {
     fn enable(&mut self);
     fn transfer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
     fn disable(&mut self);
@@ -8,7 +8,7 @@ trait SPI {
     fn set_frame(&mut self, frame: u8);
 }
 
-trait I2C {
+pub trait I2C {
     fn enable(&mut self);
     fn write(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
     fn read(&mut self, length: u8, outgoing: &mut [u8]) -> uint;
@@ -17,7 +17,7 @@ trait I2C {
     fn set_mode(&mut self, mode: u8);
 }
 
-trait UART {
+pub trait UART {
     fn enable(&mut self);
     fn transfer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
     fn disable(&mut self);
@@ -27,7 +27,7 @@ trait UART {
     fn set_stop_bits(&mut self, stop_bits: u8);
 }
 
-trait GPIO {
+pub trait GPIO {
     fn set_pull(&mut self, pull: u8);
     fn set_direction(&mut self, direction: u8);
     fn write_digital_value(&mut self, value: u8);
@@ -42,7 +42,7 @@ trait GPIO {
     fn get_interrupt_mode(&mut self) -> u8;
 }
 
-mod command {
+pub mod command {
     // Base Addr
     pub const BASE: u8 =                            0x80;
 
@@ -106,7 +106,7 @@ pub struct SPIStateMachine<'a, S: 'a> {
 }
 
 impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
-    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
 
         let command = incoming[0];
         println!("SPI Command: {0:x}", command);
@@ -177,7 +177,7 @@ pub struct I2CStateMachine<'a, I: 'a> {
 }
 
 impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
-    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
         println!("I2C Command: {}", command);
         match (self.state, command) {
@@ -241,7 +241,7 @@ pub struct UARTStateMachine<'a, U: 'a> {
 }
 
 impl<'a, U> UARTStateMachine<'a, U> where U: UART {
-    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
         println!("UART Command: {}", command);
         match (self.state, command) {
@@ -318,7 +318,7 @@ pub struct GPIOStateMachine<'a, G: 'a> {
 }
 
 impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
-    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
         let gpioIndex = incoming[1];
         let ref mut gpio = self.gpios[gpioIndex as uint];
@@ -476,7 +476,7 @@ pub mod test {
             for x in range(0u, length as uint) {
                 outgoing[x] = x as u8;
             }
-            outgoing.len()
+            length as uint
         }
         fn disable(&mut self) {
             self.enable = false;
