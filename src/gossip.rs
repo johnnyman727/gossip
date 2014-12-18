@@ -179,7 +179,7 @@ pub struct I2CStateMachine<'a, I: 'a> {
 impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
-        println!("I2C Command: {}", command);
+        println!("I2C Command: {0:x}", command);
         match (self.state, command) {
             (CommState::Idle, command::I2CENABLE) => {
                 self.i2c.enable();
@@ -241,7 +241,7 @@ pub struct UARTStateMachine<'a, U: 'a> {
 impl<'a, U> UARTStateMachine<'a, U> where U: UART {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
-        println!("UART Command: {}", command);
+        println!("UART Command: {0:x}", command);
         match (self.state, command) {
             (CommState::Idle, command::UARTENABLE) => {
                 self.uart.enable();
@@ -314,8 +314,8 @@ pub struct GPIOStateMachine<'a, G: 'a> {
 impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
-        let gpioIndex = incoming[1];
-        let ref mut gpio = self.gpios[gpioIndex as uint];
+        let gpio_index = incoming[1];
+        let ref mut gpio = self.gpios[gpio_index as uint];
          println!("GPIO Command: {0:x}", command);
         match command {
             command::GPIOSETPULL => {
@@ -326,7 +326,6 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
             command::GPIOSETSTATE => {
                 let new_value = incoming[2];
                 let new_direction = incoming[3];
-                println!("Setting {} {}", new_value, new_direction);
                 if new_value != NO_CHANGE {
                     gpio.write_digital_value(incoming[2]);
                 }
@@ -350,7 +349,6 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
             },
             command::GPIOGETSTATE => {
                 outgoing[0] = command;
-                println!("returning {} {}", gpio.read_digital_value(), gpio.get_direction());
                 outgoing[1] = gpio.read_digital_value();
                 outgoing[2] = gpio.get_direction();
                 3 as uint
@@ -377,8 +375,6 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
 
 //#[cfg(test)]
 pub mod test {
-    use super::CommState;
-    use super::command;
     use super::SPI;
     use super::I2C;
     use super::UART;
@@ -404,7 +400,6 @@ pub mod test {
             incoming.len()
         }
         fn enable(&mut self) {
-            println!("Enabled!!!");
             self.enable = true;
         }
         fn disable(&mut self) {
@@ -516,11 +511,9 @@ pub mod test {
         }
         fn set_direction(&mut self, direction: u8) {
             self.direction = direction;
-            println!("You set the direction of this pin to: {}", self.direction);
         }
         fn write_digital_value(&mut self, value: u8) {
             self.digital_value = value;
-            println!("You set the state of this pin to: {}", self.digital_value);
         }
         fn write_analog_value(&mut self, value: u8) {
             self.analog_value = value;
