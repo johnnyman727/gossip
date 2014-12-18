@@ -21,7 +21,7 @@ pub trait UART {
     fn enable(&mut self);
     fn transfer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
     fn disable(&mut self);
-    fn set_baudrate(&mut self, baudrate: u8);
+    fn set_baudrate(&mut self, baudrate: u32);
     fn set_data_bits(&mut self, data_bits: u8);
     fn set_parity(&mut self, parity: u8);
     fn set_stop_bits(&mut self, stop_bits: u8);
@@ -278,35 +278,31 @@ impl<'a, U> UARTStateMachine<'a, U> where U: UART {
             },
             (_, command::UARTSETBAUDRATE) => {
                 let payload = incoming.slice_from(1);
-                let param = payload[0];
+                let param: u32 = payload[0] as u32 | (payload[1] as u32 << 8) | (payload[2] as u32 << 16) | (payload[3] as u32 << 24);
                 self.uart.set_baudrate(param);
                 outgoing[0] = command;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::UARTSETDATABITS) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.uart.set_data_bits(param);
                 outgoing[0] = command;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::UARTSETPARITY) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.uart.set_data_bits(param);
                 outgoing[0] = command;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::UARTSETSTOPBITS) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.uart.set_stop_bits(param);
                 outgoing[0] = command;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             _ => 0 as uint
         }
@@ -493,7 +489,7 @@ pub mod test {
     pub struct MockUART {
         pub enable : bool,
         pub out_reg : u8,
-        pub baudrate: u8,
+        pub baudrate: u32,
         pub parity : u8,
         pub stop_bits: u8,
         pub data_bits : u8,
@@ -514,7 +510,7 @@ pub mod test {
         fn disable(&mut self) {
             self.enable = false;
         }
-        fn set_baudrate(&mut self, baudrate: u8) {
+        fn set_baudrate(&mut self, baudrate: u32) {
             self.baudrate = baudrate;
         }
         fn set_data_bits(&mut self, data_bits: u8) {
