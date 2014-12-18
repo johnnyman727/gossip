@@ -219,16 +219,14 @@ impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
                 let param = payload[0];
                 self.i2c.set_mode(param);
                 outgoing[0] = command::I2CSETMODE;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::I2CSETSLAVEADDRESS) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.i2c.set_slave_address(param);
                 outgoing[0] = command::I2CSETSLAVEADDRESS;
-                outgoing[1] = param;
-                2 as uint 
+                1 as uint 
             },
             _ => 0 as uint
         }
@@ -377,31 +375,9 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
     }
 }
 
-pub struct CommandRouter<'a, S: 'a, I: 'a, U: 'a, G: 'a> {
-    pub spi : &'a mut SPIStateMachine<'a, S>,
-    pub i2c : &'a mut I2CStateMachine<'a, I>,
-    pub uart : &'a mut UARTStateMachine<'a, U>,
-    pub gpio : &'a mut GPIOStateMachine<'a, G>
-}
-
-impl<'a, S, I, U, G> CommandRouter<'a, S, I, U, G> where S: SPI, I: I2C, U: UART, G: GPIO {
-    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
-        let command = incoming[0];
-        let command_type = command & 0xf0;
-        match command_type {
-            command::SPICMDBASE => self.spi.handle_buffer(incoming, outgoing),
-            command::I2CCMDBASE => self.i2c.handle_buffer(incoming, outgoing),
-            command::UARTCMDBASE => self.uart.handle_buffer(incoming, outgoing),
-            command::GPIOCMDBASE => self.gpio.handle_buffer(incoming, outgoing),
-            _ => 0
-        }
-    }
-}
-
 //#[cfg(test)]
 pub mod test {
     use super::CommState;
-    use super::CommandRouter;
     use super::command;
     use super::SPI;
     use super::I2C;
