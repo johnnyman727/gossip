@@ -19,7 +19,7 @@ trait I2C {
 
 trait UART {
     fn enable(&mut self);
-    fn transfer(&mut self, byte: u8);
+    fn transfer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint;
     fn disable(&mut self);
     fn set_baudrate(&mut self, baudrate: u8);
     fn set_data_bits(&mut self, data_bits: u8);
@@ -99,7 +99,6 @@ pub enum CommState {
     Enable,
     Idle,
 }
-
 
 pub struct SPIStateMachine<'a, S: 'a> {
     pub spi: &'a mut S,
@@ -240,6 +239,84 @@ impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
     }
 }
 
+pub struct UARTStateMachine<'a, U: 'a> {
+    pub uart: &'a mut U,
+    pub state: CommState,
+}
+
+impl<'a, U> UARTStateMachine<'a, U> where U: UART {
+    fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+        let command = incoming[0];
+        println!("UART Command: {}", command);
+        match (self.state, command) {
+            (CommState::Idle, command::UARTENABLE) => {
+                self.uart.enable();
+                self.state = CommState::Enable;
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Idle, command::UARTDISABLE) => {
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Enable, command::UARTENABLE) => {
+                outgoing[0] = command;
+                1 as uint
+            },
+            (CommState::Enable, command::UARTTRANSFER) => {
+                let length = incoming[1];
+                let payload = incoming.slice_from(2);
+                outgoing[0] = command;
+                outgoing[1] = length;
+                self.uart.transfer(payload, outgoing.slice_from_mut(2)) + 2u
+            },
+            (CommState::Enable, command::UARTRECEIVE) => {
+                // TODO - handle async uart receives
+                0 as uint
+            },
+            (CommState::Enable, command::UARTDISABLE) => {
+                self.uart.disable();
+                self.state = CommState::Idle;
+                outgoing[0] = command;
+                1 as uint
+            },
+            (_, command::UARTSETBAUDRATE) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.uart.set_baudrate(param);
+                outgoing[0] = command;
+                outgoing[1] = param;
+                2 as uint
+            },
+            (_, command::UARTSETDATABITS) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.uart.set_data_bits(param);
+                outgoing[0] = command;
+                outgoing[1] = param;
+                2 as uint
+            },
+            (_, command::UARTSETPARITY) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.uart.set_data_bits(param);
+                outgoing[0] = command;
+                outgoing[1] = param;
+                2 as uint
+            },
+            (_, command::UARTSETSTOPBITS) => {
+                let payload = incoming.slice_from(1);
+                let param = payload[0];
+                self.uart.set_stop_bits(param);
+                outgoing[0] = command;
+                outgoing[1] = param;
+                2 as uint
+            },
+            _ => 0 as uint
+        }
+    }
+}
+
 pub struct GPIOStateMachine<'a, G: 'a> {
     pub gpios : &'a mut [G],
 }
@@ -303,23 +380,26 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
                 outgoing[1] = gpio.get_interrupt_mode();
                 2 as uint
             },
-            _ => 0
+            _ => 0 as uint
         }
     }
 }
 
-pub struct CommandRouter<'a, S: 'a, I: 'a, G: 'a> {
+pub struct CommandRouter<'a, S: 'a, I: 'a, U: 'a, G: 'a> {
     pub spi : &'a mut SPIStateMachine<'a, S>,
     pub i2c : &'a mut I2CStateMachine<'a, I>,
+    pub uart : &'a mut UARTStateMachine<'a, U>,
     pub gpio : &'a mut GPIOStateMachine<'a, G>
 }
 
-impl<'a, S, I, G> CommandRouter<'a, S, I, G> where S: SPI, I: I2C, G: GPIO {
+impl<'a, S, I, U, G> CommandRouter<'a, S, I, U, G> where S: SPI, I: I2C, U: UART, G: GPIO {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
         let command_type = command & 0xf0;
         match command_type {
             command::SPICMDBASE => self.spi.handle_buffer(incoming, outgoing),
+            command::I2CCMDBASE => self.i2c.handle_buffer(incoming, outgoing),
+            command::UARTCMDBASE => self.uart.handle_buffer(incoming, outgoing),
             command::GPIOCMDBASE => self.gpio.handle_buffer(incoming, outgoing),
             _ => 0
         }
@@ -333,7 +413,7 @@ pub mod test {
     use super::command;
     use super::SPI;
     use super::I2C;
-    // use super::UART;
+    use super::UART;
     use super::GPIO;
 
     #[deriving(Copy, Eq, PartialEq, Clone, Show)]
@@ -410,6 +490,45 @@ pub mod test {
         }
         fn set_mode(&mut self, mode: u8) {
             self.mode = mode;
+        }
+    }
+
+    #[deriving(Copy, Eq, PartialEq, Clone, Show)]
+    pub struct MockUART {
+        pub enable : bool,
+        pub out_reg : u8,
+        pub baudrate: u8,
+        pub parity : u8,
+        pub stop_bits: u8,
+        pub data_bits : u8,
+    }
+
+    impl UART for MockUART {
+        fn enable(&mut self) {
+            self.enable = true;
+        }
+        fn transfer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
+            if self.enable {
+                for x in range(0u, incoming.len()) {
+                    outgoing[x] = incoming[x];
+                }
+            }
+            incoming.len()
+        }
+        fn disable(&mut self) {
+            self.enable = false;
+        }
+        fn set_baudrate(&mut self, baudrate: u8) {
+            self.baudrate = baudrate;
+        }
+        fn set_data_bits(&mut self, data_bits: u8) {
+            self.data_bits = data_bits;
+        }
+        fn set_parity(&mut self, parity: u8) {
+            self.parity = parity;
+        }
+        fn set_stop_bits(&mut self, stop_bits: u8) {
+            self.stop_bits = stop_bits;
         }
     }
 
