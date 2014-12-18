@@ -143,32 +143,28 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
                 let param = payload[0];
                 self.spi.set_clock_speed_divisor(param);
                 outgoing[0] = command::SPISETCLOCKDIVISOR;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::SPISETMODE) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.spi.set_mode(param);
                 outgoing[0] = command::SPISETMODE;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::SPISETROLE) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.spi.set_role(param);
                 outgoing[0] = command::SPISETROLE;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             (_, command::SPISETFRAME) => {
                 let payload = incoming.slice_from(1);
                 let param = payload[0];
                 self.spi.set_frame(param);
                 outgoing[0] = command::SPISETFRAME;
-                outgoing[1] = param;
-                2 as uint
+                1 as uint
             },
             _ => 0 as uint
         }
