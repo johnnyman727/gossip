@@ -96,7 +96,9 @@ const NO_CHANGE: u8 = 0xFF;
 
 #[deriving(Copy, Eq, PartialEq, Clone, Show)]
 pub enum CommState {
-    Enable,
+    SPIEnable,
+    I2CEnable,
+    UARTEnable,
     Idle,
 }
 
@@ -113,7 +115,7 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
         match (self.state, command) {
             (CommState::Idle, command::SPIENABLE) => {
                 self.spi.enable();
-                self.state = CommState::Enable;
+                self.state = CommState::SPIEnable;
                 outgoing[0] = command::SPIENABLE;
                 1 as uint
             },
@@ -121,18 +123,18 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
                 outgoing[0] = command::SPIDISABLE;
                 1 as uint
             },
-            (CommState::Enable, command::SPIENABLE) => {
+            (CommState::SPIEnable, command::SPIENABLE) => {
                 outgoing[0] = command::SPIENABLE;
                 1 as uint
             },
-            (CommState::Enable, command::SPITRANSFER) => {
+            (CommState::SPIEnable, command::SPITRANSFER) => {
                 let length = incoming[1];
                 let payload = incoming.slice_from(2);
                 outgoing[0] = command::SPITRANSFER;
                 outgoing[1] = length;
                 self.spi.transfer(payload, outgoing.slice_from_mut(2)) + 2u
             },
-            (CommState::Enable, command::SPIDISABLE) => {
+            (CommState::SPIEnable, command::SPIDISABLE) => {
                 self.spi.disable();
                 self.state = CommState::Idle;
                 outgoing[0] = command::SPIDISABLE;
@@ -171,19 +173,20 @@ impl<'a, S> SPIStateMachine<'a, S> where S: SPI {
     }
 }
 
-pub struct I2CStateMachine<'a, I: 'a> {
+pub struct I2CUARTStateMachine<'a, I: 'a, U: 'a> {
     pub i2c: &'a mut I,
+    pub uart: &'a mut U,
     pub state: CommState,
 }
 
-impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
+impl<'a, I, U> I2CUARTStateMachine<'a, I, U> where I: I2C, U: UART {
     pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
         let command = incoming[0];
-        println!("I2C Command: {0:x}", command);
+        println!("I2C or UART Command: {0:x}", command);
         match (self.state, command) {
             (CommState::Idle, command::I2CENABLE) => {
                 self.i2c.enable();
-                self.state = CommState::Enable;
+                self.state = CommState::I2CEnable;
                 outgoing[0] = command;
                 1 as uint
             },
@@ -191,24 +194,24 @@ impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
                 outgoing[0] = command;
                 1 as uint
             },
-            (CommState::Enable, command::I2CENABLE) => {
+            (CommState::I2CEnable, command::I2CENABLE) => {
                 outgoing[0] = command;
                 1 as uint
             },
-            (CommState::Enable, command::I2CWRITE) => {
+            (CommState::I2CEnable, command::I2CWRITE) => {
                 let length = incoming[1];
                 let payload = incoming.slice_from(2);
                 outgoing[0] = command;
                 outgoing[1] = length;
                 self.i2c.write(payload, outgoing.slice_from_mut(2)) + 2u
             },
-            (CommState::Enable, command::I2CREAD) => {
+            (CommState::I2CEnable, command::I2CREAD) => {
                 let length = incoming[1];
                 outgoing[0] = command;
                 outgoing[1] = length;
                 self.i2c.read(length, outgoing.slice_from_mut(2)) + 2u
             },
-            (CommState::Enable, command::I2CDISABLE) => {
+            (CommState::I2CEnable, command::I2CDISABLE) => {
                 self.i2c.disable();
                 self.state = CommState::Idle;
                 outgoing[0] = command::I2CDISABLE;
@@ -228,24 +231,9 @@ impl<'a, I> I2CStateMachine<'a, I> where I: I2C {
                 outgoing[0] = command::I2CSETSLAVEADDRESS;
                 1 as uint 
             },
-            _ => 0 as uint
-        }
-    }
-}
-
-pub struct UARTStateMachine<'a, U: 'a> {
-    pub uart: &'a mut U,
-    pub state: CommState,
-}
-
-impl<'a, U> UARTStateMachine<'a, U> where U: UART {
-    pub fn handle_buffer(&mut self, incoming: &[u8], outgoing: &mut [u8]) -> uint {
-        let command = incoming[0];
-        println!("UART Command: {0:x}", command);
-        match (self.state, command) {
             (CommState::Idle, command::UARTENABLE) => {
                 self.uart.enable();
-                self.state = CommState::Enable;
+                self.state = CommState::UARTEnable;
                 outgoing[0] = command;
                 1 as uint
             },
@@ -253,22 +241,22 @@ impl<'a, U> UARTStateMachine<'a, U> where U: UART {
                 outgoing[0] = command;
                 1 as uint
             },
-            (CommState::Enable, command::UARTENABLE) => {
+            (CommState::UARTEnable, command::UARTENABLE) => {
                 outgoing[0] = command;
                 1 as uint
             },
-            (CommState::Enable, command::UARTTRANSFER) => {
+            (CommState::UARTEnable, command::UARTTRANSFER) => {
                 let length = incoming[1];
                 let payload = incoming.slice_from(2);
                 outgoing[0] = command;
                 outgoing[1] = length;
                 self.uart.transfer(payload, outgoing.slice_from_mut(2)) + 2u
             },
-            (CommState::Enable, command::UARTRECEIVE) => {
+            (CommState::UARTEnable, command::UARTRECEIVE) => {
                 // TODO - handle async uart receives
                 0 as uint
             },
-            (CommState::Enable, command::UARTDISABLE) => {
+            (CommState::UARTEnable, command::UARTDISABLE) => {
                 self.uart.disable();
                 self.state = CommState::Idle;
                 outgoing[0] = command;
@@ -302,7 +290,7 @@ impl<'a, U> UARTStateMachine<'a, U> where U: UART {
                 outgoing[0] = command;
                 1 as uint
             },
-            _ => 0 as uint
+            _ => 0
         }
     }
 }
@@ -371,6 +359,11 @@ impl<'a, G> GPIOStateMachine<'a, G> where G: GPIO {
             _ => 0 as uint
         }
     }
+
+    // pub fn handle_interrupt(&mut self, pin: u8, outgoing: &[u8]) -> uint {
+    //     let ref mut gpio = self.gpios[pin as uint];
+    //     pin as uint
+    // }
 }
 
 //#[cfg(test)]
